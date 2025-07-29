@@ -44,6 +44,12 @@ module_t module;
 #ifdef HLC_TFT_DISPLAY
     module_t module = hlc_tft_display;
 #endif
+#ifdef CUSTOM_DISPLAY
+    module_t module = custom_display;
+#endif
+#ifdef CUSTOM_TRACKPAD
+    module_t module = custom_trackpad;
+#endif
 
 bool backlight_off = false;
 
