@@ -10,29 +10,18 @@
 #include "graphics/fonts/Retron2000-27.qff.h"
 #include "graphics/fonts/Retron2000-underline-27.qff.h"
 
-// Numbers mono2
-#include "graphics/numbers/0.qgf.h"
-#include "graphics/numbers/1.qgf.h"
-#include "graphics/numbers/2.qgf.h"
-#include "graphics/numbers/3.qgf.h"
-#include "graphics/numbers/4.qgf.h"
-#include "graphics/numbers/5.qgf.h"
-#include "graphics/numbers/6.qgf.h"
-#include "graphics/numbers/7.qgf.h"
-#include "graphics/numbers/8.qgf.h"
-#include "graphics/numbers/9.qgf.h"
+// assets
 #include "graphics/numbers/undef.qgf.h"
-#include "qwerty.qgf.h"
-#include "dvorak.qgf.h"
-#include "nav.qgf.h"
-#include "fun.qgf.h"
-#include "adj.qgf.h"
-#include "sym.qgf.h"
+#include "graphics/words/qwerty.qgf.h"
+#include "graphics/words/dvorak.qgf.h"
+#include "graphics/words/nav.qgf.h"
+#include "graphics/words/fun.qgf.h"
+#include "graphics/words/adj.qgf.h"
+#include "graphics/words/sym.qgf.h"
 
 static const char *caps =        "Caps";
 static const char *num =         "Num";
 static const char *wpm =      "WPM: ";
-static const char *dvorak =      "DV";
 
 enum layers {
     _QWERTY = 0,
@@ -45,7 +34,7 @@ enum layers {
 
 static painter_font_handle_t Retron27;
 static painter_font_handle_t Retron27_underline;
-static painter_image_handle_t layer_number;
+static painter_image_handle_t layer;
 
 static uint8_t lcd_surface_fb[SURFACE_REQUIRED_BUFFER_BYTE_SIZE(135, 240, 16)];
 
@@ -228,27 +217,27 @@ void update_display(void) {
 
     if(last_layer_state != layer_state || first_run_layer == false) {
         switch (get_highest_layer(layer_state|default_layer_state)) {
-        case [_QWERTY]:
+        case _QWERTY:
             layer = qp_load_image_mem(gfx_qwerty);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_0, HSV_BLACK);
             break;
-        case [_DVORAK]:
+        case _DVORAK:
             layer = qp_load_image_mem(gfx_dvorak);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_2, HSV_BLACK);
             break;
-        case [_NAV]:
+        case _NAV:
             layer = qp_load_image_mem(gfx_nav);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_3, HSV_BLACK);
             break;
-        case [_SYM]:
+        case _SYM:
             layer = qp_load_image_mem(gfx_sym);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_4, HSV_BLACK);
             break;
-        case [_FUNCTION]:
+        case _FUNCTION:
             layer = qp_load_image_mem(gfx_fun);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_5, HSV_BLACK);
             break;
-        case [_ADJUST]:
+        case _ADJUST:
             layer = qp_load_image_mem(gfx_adj);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_6, HSV_BLACK);
             break;
@@ -256,7 +245,7 @@ void update_display(void) {
             layer = qp_load_image_mem(gfx_undef);
             qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_UNDEF, HSV_BLACK);
         }
-        qp_close_image(layer_number);
+        qp_close_image(layer);
         last_layer_state = layer_state;
         first_run_layer = true;
     }
