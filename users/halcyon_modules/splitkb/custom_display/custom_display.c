@@ -22,11 +22,26 @@
 #include "graphics/numbers/8.qgf.h"
 #include "graphics/numbers/9.qgf.h"
 #include "graphics/numbers/undef.qgf.h"
+#include "qwerty.qgf.h"
+#include "dvorak.qgf.h"
+#include "nav.qgf.h"
+#include "fun.qgf.h"
+#include "adj.qgf.h"
+#include "sym.qgf.h"
 
 static const char *caps =        "Caps";
 static const char *num =         "Num";
 static const char *wpm =      "WPM: ";
 static const char *dvorak =      "DV";
+
+enum layers {
+    _QWERTY = 0,
+    _DVORAK,
+    _NAV,
+    _SYM,
+    _FUNCTION,
+    _ADJUST,
+};
 
 static painter_font_handle_t Retron27;
 static painter_font_handle_t Retron27_underline;
@@ -213,40 +228,33 @@ void update_display(void) {
 
     if(last_layer_state != layer_state || first_run_layer == false) {
         switch (get_highest_layer(layer_state|default_layer_state)) {
-        case 0:
-            layer_number = qp_load_image_mem(gfx_0);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_0, HSV_BLACK);
+        case [_QWERTY]:
+            layer = qp_load_image_mem(gfx_qwerty);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_0, HSV_BLACK);
             break;
-        case 1:
-            qp_drawtext_recolor(lcd_surface, 5, 5, Retron27, dvorak, HSV_LAYER_1, HSV_BLACK);
+        case [_DVORAK]:
+            layer = qp_load_image_mem(gfx_dvorak);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_2, HSV_BLACK);
             break;
-        case 2:
-            layer_number = qp_load_image_mem(gfx_2);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_2, HSV_BLACK);
+        case [_NAV]:
+            layer = qp_load_image_mem(gfx_nav);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_3, HSV_BLACK);
             break;
-        case 3:
-            layer_number = qp_load_image_mem(gfx_3);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_3, HSV_BLACK);
+        case [_SYM]:
+            layer = qp_load_image_mem(gfx_sym);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_4, HSV_BLACK);
             break;
-        case 4:
-            layer_number = qp_load_image_mem(gfx_4);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_4, HSV_BLACK);
+        case [_FUNCTION]:
+            layer = qp_load_image_mem(gfx_fun);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_5, HSV_BLACK);
             break;
-        case 5:
-            layer_number = qp_load_image_mem(gfx_5);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_5, HSV_BLACK);
-            break;
-        case 6:
-            layer_number = qp_load_image_mem(gfx_6);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_6, HSV_BLACK);
-            break;
-        case 7:
-            layer_number = qp_load_image_mem(gfx_7);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_7, HSV_BLACK);
+        case [_ADJUST]:
+            layer = qp_load_image_mem(gfx_adj);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_6, HSV_BLACK);
             break;
         default:
-            layer_number = qp_load_image_mem(gfx_undef);
-            qp_drawimage_recolor(lcd_surface, 5, 5, layer_number, HSV_LAYER_UNDEF, HSV_BLACK);
+            layer = qp_load_image_mem(gfx_undef);
+            qp_drawimage_recolor(lcd_surface, 5, 5, layer, HSV_LAYER_UNDEF, HSV_BLACK);
         }
         qp_close_image(layer_number);
         last_layer_state = layer_state;
