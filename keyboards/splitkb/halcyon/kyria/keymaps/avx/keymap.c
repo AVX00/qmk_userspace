@@ -5,11 +5,11 @@
 
 enum layers {
     _QWERTY = 0,
-    _DVORAK,
-    _NAV,
-    _SYM,
-    _FUNCTION,
-    _ADJUST,
+    _DVORAK = 1,
+    _NAV = 2,
+    _SYM = 3,
+    _FUNCTION = 4,
+    _ADJUST = 5,
 };
 
 
