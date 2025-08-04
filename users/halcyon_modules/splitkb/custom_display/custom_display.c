@@ -57,13 +57,11 @@ bool grid[GRID_HEIGHT][GRID_WIDTH];         // Current state
 bool new_grid[GRID_HEIGHT][GRID_WIDTH];     // Next state
 bool changed_grid[GRID_HEIGHT][GRID_WIDTH]; // Tracks changed cells
 
-// scrolling text
-static bool     animation_ended  = false;
-static char     currentLayer[12] = "\0";
-static int      currentColor[3];
-static int      lateral_scroll         = 0;
-static int      scroll_update_interval = 150;
-static uint32_t last_scroll_update     = 0;
+// Drawtext rect last rectangle
+static uint16_t last_rect_left   = 0;
+static uint16_t last_rect_top    = 0;
+static uint16_t last_rect_right  = 0;
+static uint16_t last_rect_bottom = 0;
 
 uint32_t get_random_32bit(void) {
     uint32_t random_value = 0;
@@ -190,6 +188,62 @@ void add_cell_cluster() {
     }
 }
 
+// function to display text in a rectangle and wrap if it overflows
+void drawtext_recolor_rect(painter_device_t device, uint16_t left, int16_t top, int16_t right, int16_t bottom, painter_font_handle_t font, const char *text, uint8_t hue_fg, uint8_t sat_fg, uint8_t val_fg, uint8_t hue_bg, uint8_t sat_bg, uint8_t val_bg, bool center_text) {
+    int16_t rect_width  = right - left;
+    int16_t line_height = font->line_height;
+    int16_t current_y   = top;
+
+    int text_len = strlen(text);
+    int text_pos = 0;
+
+    while (text_pos < text_len && current_y + line_height <= bottom) {
+        // Binary search to find maximum characters that fit in current line
+        int low      = 0;
+        int high     = text_len - text_pos;
+        int best_fit = 0;
+
+        while (low <= high) {
+            int mid = (low + high) / 2;
+
+            // Create temporary string with mid characters
+            char temp_str[mid + 1];
+            strncpy(temp_str, text + text_pos, mid);
+            temp_str[mid] = '\0';
+
+            int16_t temp_width = qp_textwidth(font, temp_str);
+
+            if (temp_width <= rect_width) {
+                best_fit = mid;
+                low      = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        // If we can fit at least one character, draw it
+        if (best_fit > 0 && current_y + line_height <= bottom) {
+            char line_str[best_fit + 1];
+            strncpy(line_str, text + text_pos, best_fit);
+            line_str[best_fit] = '\0';
+
+            qp_drawtext_recolor(device, left, current_y, font, line_str, hue_fg, sat_fg, val_fg, hue_bg, sat_bg, val_bg);
+
+            text_pos += best_fit;
+            current_y += line_height; // Move to next line
+        } else {
+            // Can't fit even one character, break
+            break;
+        }
+    }
+
+    // Update the last rectangle drawn
+    last_rect_left   = left;
+    last_rect_top    = top;
+    last_rect_right  = right;
+    last_rect_bottom = current_y;
+}
+
 void update_display(void) {
     static bool first_run_led   = false;
     static bool first_run_layer = false;
@@ -221,59 +275,41 @@ void update_display(void) {
     qp_drawtext_recolor(lcd_surface, 5 + qp_textwidth(Retron27, wpm), wpm_height, Retron27, wpm_str, HSV_WPM_NUM, HSV_BLACK);
 
     if (last_layer_state != layer_state || first_run_layer == false) {
-        lateral_scroll  = 5;
-        animation_ended = false;
+        char layernum[4] = {0};
+        snprintf(layernum, sizeof(layernum), "%02d", get_highest_layer(layer_state | default_layer_state));
+
+        qp_rect(lcd_surface, last_rect_left, last_rect_top, last_rect_right, last_rect_bottom, HSV_BLACK, true);
 
         switch (get_highest_layer(layer_state | default_layer_state)) {
             case _QWERTY:
-                strcpy(currentLayer, qwerty);
-                memcpy(currentColor, (int[]){HSV_LAYER_0}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, qwerty, HSV_LAYER_0, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, qwerty, HSV_LAYER_0, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_0, HSV_BLACK);
                 break;
             case _DVORAK:
-                strcpy(currentLayer, dvorak);
-                memcpy(currentColor, (int[]){HSV_LAYER_1}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, dvorak, HSV_LAYER_1, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, dvorak, HSV_LAYER_1, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_1, HSV_BLACK);
                 break;
             case _NAV:
-                strcpy(currentLayer, nav);
-                memcpy(currentColor, (int[]){HSV_LAYER_2}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, nav, HSV_LAYER_2, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, nav, HSV_LAYER_2, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_2, HSV_BLACK);
                 break;
             case _SYM:
-                strcpy(currentLayer, sym);
-                memcpy(currentColor, (int[]){HSV_LAYER_3}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, sym, HSV_LAYER_3, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, sym, HSV_LAYER_3, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_3, HSV_BLACK);
                 break;
             case _FUNCTION:
-                strcpy(currentLayer, func);
-                memcpy(currentColor, (int[]){HSV_LAYER_4}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, func, HSV_LAYER_4, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, func, HSV_LAYER_4, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_4, HSV_BLACK);
                 break;
             case _ADJUST:
-                strcpy(currentLayer, adj);
-                memcpy(currentColor, (int[]){HSV_LAYER_5}, sizeof(currentColor));
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, adj, HSV_LAYER_5, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, adj, HSV_LAYER_5, HSV_BLACK);
+                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_4, HSV_BLACK);
                 break;
             default:
-                qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, undef, HSV_LAYER_UNDEF, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height, sixtyfour, undef, HSV_LAYER_UNDEF, HSV_BLACK);
         }
         last_layer_state = layer_state;
         first_run_layer  = true;
-    } else {
-        if (!animation_ended && timer_elapsed32(last_scroll_update) >= scroll_update_interval) {
-            lateral_scroll -= 5;
-            last_scroll_update = timer_read32();
-
-            if (lateral_scroll < -qp_textwidth(sixtyfour, currentLayer)) {
-                animation_ended = true;
-                lateral_scroll  = 5;
-            }
-
-            qp_rect(lcd_surface, 0, 0, LCD_WIDTH - 1, 10 + sixtyfour->line_height, HSV_BLACK, true);
-
-            qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, currentLayer, currentColor[0], currentColor[1], currentColor[2], HSV_BLACK);
-        }
     }
 }
 
