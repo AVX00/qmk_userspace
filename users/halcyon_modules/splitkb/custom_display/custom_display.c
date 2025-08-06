@@ -37,7 +37,7 @@ static painter_font_handle_t Retron27_underline;
 
 static uint8_t lcd_surface_fb[SURFACE_REQUIRED_BUFFER_BYTE_SIZE(135, 240, 16)];
 
-static int color_value = 0;
+static int16_t color_value = 0;
 
 painter_device_t lcd;
 painter_device_t lcd_surface;
@@ -57,15 +57,9 @@ bool grid[GRID_HEIGHT][GRID_WIDTH];         // Current state
 bool new_grid[GRID_HEIGHT][GRID_WIDTH];     // Next state
 bool changed_grid[GRID_HEIGHT][GRID_WIDTH]; // Tracks changed cells
 
-// Drawtext rect last rectangle
-static uint16_t last_rect_left   = 0;
-static uint16_t last_rect_top    = 0;
-static uint16_t last_rect_right  = 0;
-static uint16_t last_rect_bottom = 0;
-
 uint32_t get_random_32bit(void) {
     uint32_t random_value = 0;
-    for (int i = 0; i < 32; i++) {
+    for (int16_t i = 0; i < 32; i++) {
         wait_ms(1);
         random_value = (random_value << 1) | (rosc_hw->randombit & 1);
     }
@@ -74,8 +68,8 @@ uint32_t get_random_32bit(void) {
 
 void init_grid() {
     // Initialize grid with alive cells
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
+    for (int16_t y = 0; y < GRID_HEIGheT; y++) {
+        for (int16_t x = 0; x < GRID_WIDTH; x++) {
             grid[y][x]         = (rand() < INITIAL_ALIVE_PROBABILITY * RAND_MAX); // Use probability factor
             changed_grid[y][x] = true;                                            // Mark all as changed initially
         }
@@ -87,8 +81,8 @@ void draw_grid() {
     uint8_t sat      = 0; // Saturation for alive cells
     uint8_t val_dead = 0; // Brightness for dead cells
 
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
+    for (int16_t y = 0; y < GRID_HEIGHT; y++) {
+        for (int16_t x = 0; x < GRID_WIDTH; x++) {
             if (changed_grid[y][x]) { // Only update changed cells
                 uint16_t left   = x * (CELL_SIZE + OUTLINE_SIZE);
                 uint16_t top    = y * (CELL_SIZE + OUTLINE_SIZE);
@@ -135,16 +129,16 @@ void draw_grid() {
 }
 
 void update_grid() {
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            int alive_neighbors = 0;
+    for (int16_t y = 0; y < GRID_HEIGHT; y++) {
+        for (int16_t x = 0; x < GRID_WIDTH; x++) {
+            int16_t alive_neighbors = 0;
 
             // Count alive neighbors
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
+            for (int16_t dy = -1; dy <= 1; dy++) {
+                for (int16_t dx = -1; dx <= 1; dx++) {
                     if (dy == 0 && dx == 0) continue; // Skip the current cell
-                    int ny = y + dy;
-                    int nx = x + dx;
+                    int16_t ny = y + dy;
+                    int16_t nx = x + dx;
                     if (ny >= 0 && ny < GRID_HEIGHT && nx >= 0 && nx < GRID_WIDTH) {
                         alive_neighbors += grid[ny][nx];
                     }
@@ -166,8 +160,8 @@ void update_grid() {
     }
 
     // Copy new grid state to current grid
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
+    for (int16_t y = 0; y < GRID_HEIGHT; y++) {
+        for (int16_t x = 0; x < GRID_WIDTH; x++) {
             grid[y][x] = new_grid[y][x];
         }
     }
@@ -175,12 +169,12 @@ void update_grid() {
 
 // Function to add a cluster of cells at a random position
 void add_cell_cluster() {
-    int cluster_size = 3; // Size of the cluster (3x3)
-    int x            = rand() % (GRID_WIDTH - cluster_size);
-    int y            = rand() % (GRID_HEIGHT - cluster_size);
+    int16_t cluster_size = 3; // Size of the cluster (3x3)
+    int16_t x            = rand() % (GRID_WIDTH - cluster_size);
+    int16_t y            = rand() % (GRID_HEIGHT - cluster_size);
 
-    for (int dy = 0; dy < cluster_size; dy++) {
-        for (int dx = 0; dx < cluster_size; dx++) {
+    for (int16_t dy = 0; dy < cluster_size; dy++) {
+        for (int16_t dx = 0; dx < cluster_size; dx++) {
             bool is_alive                = rand() % 2; // Randomly choose between 0 and 1
             grid[y + dy][x + dx]         = is_alive;   // Set the cell to be alive
             changed_grid[y + dy][x + dx] = true;       // Mark the cell as changed
@@ -188,60 +182,97 @@ void add_cell_cluster() {
     }
 }
 
-// function to display text in a rectangle and wrap if it overflows
-void drawtext_recolor_rect(painter_device_t device, uint16_t left, int16_t top, int16_t right, int16_t bottom, painter_font_handle_t font, const char *text, uint8_t hue_fg, uint8_t sat_fg, uint8_t val_fg, uint8_t hue_bg, uint8_t sat_bg, uint8_t val_bg, bool center_text) {
-    int16_t rect_width  = right - left;
-    int16_t line_height = font->line_height;
-    int16_t current_y   = top;
+// Helper function for safer memory cleanup
+void free_string_array(char **array, int16_t count) {
+    if (array != NULL) {
+        for (int16_t i = 0; i < count; i++) {
+            free(array[i]);
+        }
+        free(array);
+    }
+}
 
-    int text_len = strlen(text);
-    int text_pos = 0;
+// Function to split a string into n substrings
+int16_t str2nstr(char ***dest, char *string, int16_t n) {
+    assert(string != NULL);
 
-    while (text_pos < text_len && current_y + line_height <= bottom) {
-        // Binary search to find maximum characters that fit in current line
-        int low      = 0;
-        int high     = text_len - text_pos;
-        int best_fit = 0;
+    int16_t str_length = strlen(string);
+    if (str_length == 0 || n <= 0) return -1;
 
-        while (low <= high) {
-            int mid = (low + high) / 2;
+    int16_t max_strlen       = str_length / n;
+    int16_t current_fragment = 0;
+    int16_t str_index        = 0;
 
-            // Create temporary string with mid characters
-            char temp_str[mid + 1];
-            strncpy(temp_str, text + text_pos, mid);
-            temp_str[mid] = '\0';
+    *dest = calloc(n, sizeof(char *));
+    if (*dest == NULL) return -1;
 
-            int16_t temp_width = qp_textwidth(font, temp_str);
-
-            if (temp_width <= rect_width) {
-                best_fit = mid;
-                low      = mid + 1;
-            } else {
-                high = mid - 1;
-            }
+    while (current_fragment < n && current_fragment < str_length) {
+        (*dest)[current_fragment] = malloc(sizeof(char) * (max_strlen + 1));
+        if ((*dest)[current_fragment] == NULL) {
+            for (int16_t j = 0; j < current_fragment; j++)
+                free((*dest)[j]);
+            free(*dest);
+            *dest = NULL;
+            return -1;
         }
 
-        // If we can fit at least one character, draw it
-        if (best_fit > 0 && current_y + line_height <= bottom) {
-            char line_str[best_fit + 1];
-            strncpy(line_str, text + text_pos, best_fit);
-            line_str[best_fit] = '\0';
+        strncpy((*dest)[current_fragment], string + str_index, max_strlen);
+        (*dest)[current_fragment][max_strlen] = '\0';
+        current_fragment += 1;
+        str_index += max_strlen;
+    }
 
-            qp_drawtext_recolor(device, left, current_y, font, line_str, hue_fg, sat_fg, val_fg, hue_bg, sat_bg, val_bg);
+    return current_fragment;
+}
 
-            text_pos += best_fit;
-            current_y += line_height; // Move to next line
-        } else {
-            // Can't fit even one character, break
-            break;
+// function to display text in a rectangle and wrap if it overflows returns n lines
+int16_t drawtext_multiline_recolor_rect(painter_device_t device, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, painter_font_handle_t font, const char *text, uint8_t hue_fg, uint8_t sat_fg, uint8_t val_fg, uint8_t hue_bg, uint8_t sat_bg, uint8_t val_bg, uint16_t lines) {
+    assert(text != NULL);
+
+    char   **text_fragments      = NULL;
+    uint16_t max_width           = right - left;
+    uint16_t max_fragment_length = strlen(text);
+    char    *text_copy           = strdup(text);
+    int16_t  widths[lines];
+
+    if (text_copy == NULL || font->line_height * lines > (bottom - top)) {
+        return -1; // Memory allocation failed
+    }
+
+    if (str2nstr(&text_fragments, text_copy, lines) < 0) {
+        free_string_array(text_fragments, lines);
+        return -1;
+    }
+
+    for (int16_t i = 0; i < lines && i < max_fragment_length; i++) {
+        int16_t text_width = qp_textwidth(sixtyfour, text_fragments[i]);
+        widths[i]          = text_width;
+
+        // qp_drawtext_recolor(lcd_surface, 5, 5 + sixtyfour->line_height * i, sixtyfour, text_fragments[i], HSV_RED, HSV_BLACK);
+
+        if (text_width > max_width) {
+            free_string_array(text_fragments, lines);
+            free(text_copy);
+
+            return drawtext_multiline_recolor_rect(device, left, top, right, bottom, font, text, hue_fg, sat_fg, val_fg, hue_bg, sat_bg, val_bg, lines + 1);
         }
     }
 
-    // Update the last rectangle drawn
-    last_rect_left   = left;
-    last_rect_top    = top;
-    last_rect_right  = right;
-    last_rect_bottom = current_y;
+    // Draw each fragment
+    for (int16_t i = 0; i < lines; i++) {
+        int16_t centered_left = ((right - left) / 2) - (widths[i] / 2);
+
+        qp_drawtext_recolor(device, centered_left, top + i * font->line_height, font, text_fragments[i], hue_fg, sat_fg, val_fg, hue_bg, sat_bg, val_bg);
+        free(text_fragments[i]);
+    }
+    free_string_array(text_fragments, lines);
+
+    return lines;
+}
+
+void drawtext_recolor_rect(painter_device_t device, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom, painter_font_handle_t font, const char *text, uint8_t hue_fg, uint8_t sat_fg, uint8_t val_fg, uint8_t hue_bg, uint8_t sat_bg, uint8_t val_bg) {
+    assert(text != NULL);
+    drawtext_multiline_recolor_rect(device, left, top, right, bottom, font, text, hue_fg, sat_fg, val_fg, hue_bg, sat_bg, val_bg, 1);
 }
 
 void update_display(void) {
@@ -264,10 +295,10 @@ void update_display(void) {
         first_run_led      = true;
     }
 
-    int wpm_height = LCD_HEIGHT - Retron27->line_height - 5;
+    int16_t wpm_height = LCD_HEIGHT - Retron27->line_height - 5;
     qp_drawtext_recolor(lcd_surface, 5, wpm_height, Retron27, wpm, HSV_WPM_TEXT, HSV_BLACK);
-    char wpm_str[4] = {0};
-    int  wpm_value  = get_current_wpm();
+    char    wpm_str[4] = {0};
+    int16_t wpm_value  = get_current_wpm();
     if (wpm_value > 999) {
         wpm_value = 999; // Cap WPM at 999
     }
@@ -275,38 +306,33 @@ void update_display(void) {
     qp_drawtext_recolor(lcd_surface, 5 + qp_textwidth(Retron27, wpm), wpm_height, Retron27, wpm_str, HSV_WPM_NUM, HSV_BLACK);
 
     if (last_layer_state != layer_state || first_run_layer == false) {
-        char layernum[4] = {0};
-        snprintf(layernum, sizeof(layernum), "%02d", get_highest_layer(layer_state | default_layer_state));
-
-        qp_rect(lcd_surface, last_rect_left, last_rect_top, last_rect_right, last_rect_bottom, HSV_BLACK, true);
+        uint16_t text_left   = 5;
+        uint16_t text_top    = 5;
+        uint16_t text_right  = LCD_WIDTH - 5;
+        uint16_t text_bottom = sixtyfour->line_height * 3 + 5;
+        qp_rect(lcd_surface, text_left, text_top, text_right, text_bottom, HSV_BLACK, true);
 
         switch (get_highest_layer(layer_state | default_layer_state)) {
             case _QWERTY:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, qwerty, HSV_LAYER_0, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_0, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, qwerty, HSV_LAYER_0, HSV_BLACK);
                 break;
             case _DVORAK:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, dvorak, HSV_LAYER_1, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_1, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, dvorak, HSV_LAYER_1, HSV_BLACK);
                 break;
             case _NAV:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, nav, HSV_LAYER_2, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_2, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, nav, HSV_LAYER_2, HSV_BLACK);
                 break;
             case _SYM:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, sym, HSV_LAYER_3, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_3, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, sym, HSV_LAYER_3, HSV_BLACK);
                 break;
             case _FUNCTION:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, func, HSV_LAYER_4, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_4, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, func, HSV_LAYER_4, HSV_BLACK);
                 break;
             case _ADJUST:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height * 2 + 5, sixtyfour, adj, HSV_LAYER_5, HSV_BLACK);
-                // qp_drawtext_recolor(lcd_surface, lateral_scroll, 5, sixtyfour, layernum, HSV_LAYER_4, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, adj, HSV_LAYER_5, HSV_BLACK);
                 break;
             default:
-                drawtext_recolor_rect(lcd_surface, 5, 5, LCD_WIDTH - 5, sixtyfour->line_height, sixtyfour, undef, HSV_LAYER_UNDEF, HSV_BLACK);
+                drawtext_recolor_rect(lcd_surface, text_left, text_top, text_right, text_bottom, sixtyfour, undef, HSV_LAYER_UNDEF, HSV_BLACK);
         }
         last_layer_state = layer_state;
         first_run_layer  = true;
